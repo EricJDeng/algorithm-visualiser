@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L-Shape Grid Filling</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px 20px;
+  }
+
+  h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+
+  .subtitle {
+    color: #888;
+    font-size: 0.95rem;
+    margin-bottom: 24px;
+  }
+
+  .controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  button {
+    font-family: 'DM Sans', sans-serif;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+
+  button:hover { transform: translateY(-1px); }
+
+  .btn-primary {
+    background: #4361ee;
+    color: white;
+  }
+  .btn-primary:hover { background: #3a56d4; }
+
+  .btn-secondary {
+    background: #2a2a4a;
+    color: #ccc;
+    border: 1px solid #3a3a5a;
+  }
+  .btn-secondary:hover { background: #3a3a5a; }
+
+  .btn-reset {
+    background: #e74c3c;
+    color: white;
+  }
+  .btn-reset:hover { background: #c0392b; }
+
+  .size-selector {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .size-selector span {
+    color: #888;
+    font-size: 0.85rem;
+    margin-right: 4px;
+  }
+
+  .size-btn {
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    background: #2a2a4a;
+    color: #aaa;
+    border: 1px solid #3a3a5a;
+  }
+
+  .size-btn.active {
+    background: #4361ee;
+    color: white;
+    border-color: #4361ee;
+  }
+
+  .grid-container {
+    position: relative;
+    margin-bottom: 24px;
+  }
+
+  canvas {
+    border-radius: 12px;
+    cursor: pointer;
+  }
+
+  .instructions {
+    background: #2a2a4a;
+    border-radius: 12px;
+    padding: 20px 24px;
+    max-width: 500px;
+    width: 100%;
+  }
+
+  .instructions h3 {
+    font-size: 1rem;
+    color: #4361ee;
+    margin-bottom: 10px;
+  }
+
+  .step {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: #bbb;
+  }
+
+  .step-num {
+    background: #4361ee;
+    color: white;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .status {
+    text-align: center;
+    margin-bottom: 16px;
+    font-size: 0.95rem;
+    color: #aaa;
+    min-height: 24px;
+  }
+
+  .status.highlight { color: #4361ee; font-weight: 500; }
+</style>
+</head>
+<body>
+
+<h1>L-Shape Grid Filling</h1>
+<p class="subtitle">Remove one cell, fill the rest with L-shaped pieces</p>
+
+<div class="size-selector">
+  <span>Grid size:</span>
+  <button class="btn size-btn active" onclick="setSize(1)">2×2</button>
+  <button class="btn size-btn" onclick="setSize(2)">4×4</button>
+  <button class="btn size-btn" onclick="setSize(3)">8×8</button>
+</div>
+
+<div class="controls" style="margin-top: 12px;">
+  <button class="btn-primary" onclick="solve()">▶ Solve Step by Step</button>
+  <button class="btn-secondary" onclick="solveInstant()">Solve Instantly</button>
+  <button class="btn-reset" onclick="resetGrid()">Reset</button>
+</div>
+
+<div class="status" id="status">Click any cell to remove it, then press Solve</div>
+
+<div class="grid-container">
+  <canvas id="canvas"></canvas>
+</div>
+
+<div class="instructions">
+  <h3>How it works</h3>
+  <div class="step">
+    <div class="step-num">1</div>
+    <div>Click a cell to remove it (the black cell)</div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div>The grid splits into 4 quarters. One quarter has the missing cell.</div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div>Place an L-piece in the center, touching the 3 quarters that DON'T have a missing cell. Now every quarter has one missing cell!</div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div>Repeat for each quarter until you reach 2×2 grids.</div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+
+let m = 2; // exponent, grid is 2^m x 2^m
+let N = 4;
+let CELL = 80;
+let grid = [];
+let removedCell = null;
+let pieces = [];
+let colorIndex = 0;
+let animating = false;
+
+const COLORS = [
+  '#4361ee', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6',
+  '#1abc9c', '#e67e22', '#3498db', '#e91e63', '#00bcd4',
+  '#8bc34a', '#ff5722', '#673ab7', '#009688', '#ffc107',
+  '#795548', '#607d8b', '#ff9800', '#cddc39', '#03a9f4',
+  '#f44336', '#4caf50', '#ff6f00', '#7c4dff', '#00e5ff',
+  '#76ff03', '#ff1744', '#651fff', '#00b8d4', '#aeea00'
+];
+
+function setSize(newM) {
+  m = newM;
+  N = Math.pow(2, m);
+  
+  document.querySelectorAll('.size-btn').forEach((b, i) => {
+    b.classList.toggle('active', i + 1 === m);
+  });
+  
+  resetGrid();
+}
+
+function resetGrid() {
+  if (N <= 4) CELL = 80;
+  else CELL = Math.min(80, Math.floor(400 / N));
+  
+  canvas.width = N * CELL + 2;
+  canvas.height = N * CELL + 2;
+  
+  grid = Array.from({length: N}, () => Array(N).fill(0));
+  removedCell = null;
+  pieces = [];
+  colorIndex = 0;
+  animating = false;
+  
+  statusEl.textContent = 'Click any cell to remove it, then press Solve';
+  statusEl.className = 'status';
+  
+  draw();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw cells
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const x = c * CELL + 1;
+      const y = r * CELL + 1;
+      
+      if (removedCell && removedCell[0] === r && removedCell[1] === c) {
+        ctx.fillStyle = '#111';
+        ctx.fillRect(x, y, CELL, CELL);
+        // X mark
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x + 8, y + 8);
+        ctx.lineTo(x + CELL - 8, y + CELL - 8);
+        ctx.moveTo(x + CELL - 8, y + 8);
+        ctx.lineTo(x + 8, y + CELL - 8);
+        ctx.stroke();
+      } else if (grid[r][c] > 0) {
+        const ci = (grid[r][c] - 1) % COLORS.length;
+        ctx.fillStyle = COLORS[ci];
+        ctx.fillRect(x, y, CELL, CELL);
+        
+        // Inner border for definition
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2);
+        ctx.fillStyle = COLORS[ci];
+        ctx.fillRect(x + 3, y + 3, CELL - 6, CELL - 6);
+      } else {
+        ctx.fillStyle = '#2a2a4a';
+        ctx.fillRect(x, y, CELL, CELL);
+      }
+      
+      // Grid lines
+      ctx.strokeStyle = '#1a1a2e';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, CELL, CELL);
+    }
+  }
+  
+  // Draw quadrant lines for context
+  if (N >= 4) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    
+    // Only draw the main center lines
+    const mid = N / 2 * CELL + 1;
+    ctx.beginPath();
+    ctx.moveTo(mid, 1);
+    ctx.lineTo(mid, N * CELL + 1);
+    ctx.moveTo(1, mid);
+    ctx.lineTo(N * CELL + 1, mid);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+canvas.addEventListener('click', (e) => {
+  if (animating) return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const c = Math.floor((x - 1) / CELL);
+  const r = Math.floor((y - 1) / CELL);
+  
+  if (r >= 0 && r < N && c >= 0 && c < N) {
+    // Reset pieces but keep this as removed
+    grid = Array.from({length: N}, () => Array(N).fill(0));
+    pieces = [];
+    colorIndex = 0;
+    removedCell = [r, c];
+    statusEl.textContent = `Removed cell (${r+1}, ${c+1}). Press Solve!`;
+    statusEl.className = 'status highlight';
+    draw();
+  }
+});
+
+function fillTromino(size, topR, topC, missingR, missingC) {
+  if (size === 1) return;
+  
+  colorIndex++;
+  const thisColor = colorIndex;
+  const half = size / 2;
+  
+  // Find which quadrant has the missing cell
+  // Quadrants: TL(0), TR(1), BL(2), BR(3)
+  let missingQ;
+  if (missingR < topR + half && missingC < topC + half) missingQ = 0;
+  else if (missingR < topR + half && missingC >= topC + half) missingQ = 1;
+  else if (missingR >= topR + half && missingC < topC + half) missingQ = 2;
+  else missingQ = 3;
+  
+  // Place L-piece at center, covering one cell from each quadrant that doesn't have the missing cell
+  const centerCells = [
+    [topR + half - 1, topC + half - 1], // TL corner cell
+    [topR + half - 1, topC + half],     // TR corner cell
+    [topR + half, topC + half - 1],     // BL corner cell
+    [topR + half, topC + half],         // BR corner cell
+  ];
+  
+  const lPieceCells = [];
+  for (let q = 0; q < 4; q++) {
+    if (q !== missingQ) {
+      lPieceCells.push(centerCells[q]);
+    }
+  }
+  
+  pieces.push({ cells: lPieceCells, color: thisColor });
+  
+  // Now recurse on each quadrant
+  // Each quadrant now has exactly one missing cell
+  const quadrants = [
+    { tr: topR, tc: topC },                    // TL
+    { tr: topR, tc: topC + half },             // TR
+    { tr: topR + half, tc: topC },             // BL
+    { tr: topR + half, tc: topC + half },      // BR
+  ];
+  
+  const missingCells = [];
+  for (let q = 0; q < 4; q++) {
+    if (q === missingQ) {
+      missingCells.push([missingR, missingC]);
+    } else {
+      missingCells.push(centerCells[q]);
+    }
+  }
+  
+  for (let q = 0; q < 4; q++) {
+    fillTromino(half, quadrants[q].tr, quadrants[q].tc, missingCells[q][0], missingCells[q][1]);
+  }
+}
+
+function solve() {
+  if (!removedCell) {
+    // Default: remove top-left
+    removedCell = [0, 0];
+  }
+  if (animating) return;
+  
+  grid = Array.from({length: N}, () => Array(N).fill(0));
+  pieces = [];
+  colorIndex = 0;
+  
+  fillTromino(N, 0, 0, removedCell[0], removedCell[1]);
+  
+  // Animate piece by piece
+  animating = true;
+  let i = 0;
+  
+  function animateNext() {
+    if (i >= pieces.length) {
+      animating = false;
+      statusEl.textContent = `Done! Filled with ${pieces.length} L-pieces.`;
+      statusEl.className = 'status highlight';
+      return;
+    }
+    
+    const piece = pieces[i];
+    for (const [r, c] of piece.cells) {
+      grid[r][c] = piece.color;
+    }
+    
+    statusEl.textContent = `Placing L-piece ${i + 1} of ${pieces.length}...`;
+    statusEl.className = 'status';
+    
+    draw();
+    i++;
+    
+    const delay = N <= 4 ? 500 : N <= 8 ? 200 : 80;
+    setTimeout(animateNext, delay);
+  }
+  
+  animateNext();
+}
+
+function solveInstant() {
+  if (!removedCell) {
+    removedCell = [0, 0];
+  }
+  
+  grid = Array.from({length: N}, () => Array(N).fill(0));
+  pieces = [];
+  colorIndex = 0;
+  
+  fillTromino(N, 0, 0, removedCell[0], removedCell[1]);
+  
+  for (const piece of pieces) {
+    for (const [r, c] of piece.cells) {
+      grid[r][c] = piece.color;
+    }
+  }
+  
+  statusEl.textContent = `Done! Filled with ${pieces.length} L-pieces.`;
+  statusEl.className = 'status highlight';
+  draw();
+}
+
+// Init
+resetGrid();
+</script>
+</body>
+</html>
